@@ -1,0 +1,116 @@
+services:
+  # Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: pmp-app
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/project_management?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
+      JWT_EXPIRES_IN: 7d
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pmp-network
+
+  # Development app (with hot reload)
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: pmp-app-dev
+    profiles:
+      - dev
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/project_management?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-secret-key
+      JWT_EXPIRES_IN: 7d
+      PORT: 3000
+    volumes:
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pmp-network
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: pmp-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: project_management
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pmp-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: pmp-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pmp-network
+
+  # Database migrations and seeding (run once)
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: pmp-migrate
+    profiles:
+      - migrate
+    command: sh -c "npx prisma migrate deploy && npx ts-node prisma/seed.ts"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/project_management?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - pmp-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  pmp-network:
+    driver: bridge
