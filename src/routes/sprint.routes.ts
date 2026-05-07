@@ -15,6 +15,18 @@ router.use(authenticate);
  *   get:
  *     tags: [Sprints]
  *     summary: List sprints for a project
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project identifier
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Optional sprint status filter
  */
 router.get('/', requireProjectAccess('VIEWER'), SprintController.list);
 
@@ -24,6 +36,31 @@ router.get('/', requireProjectAccess('VIEWER'), SprintController.list);
  *   post:
  *     tags: [Sprints]
  *     summary: Create a new sprint
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project identifier
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name]
+ *             properties:
+ *               name:
+ *                 type: string
+ *               goal:
+ *                 type: string
+ *               startDate:
+ *                 type: string
+ *                 format: date
+ *               endDate:
+ *                 type: string
+ *                 format: date
  */
 router.post(
   '/',
@@ -43,6 +80,13 @@ router.post(
  *   get:
  *     tags: [Sprints]
  *     summary: Get velocity report for a project
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project identifier
  */
 router.get('/velocity', requireProjectAccess('VIEWER'), SprintController.getVelocity);
 
@@ -52,6 +96,24 @@ router.get('/velocity', requireProjectAccess('VIEWER'), SprintController.getVelo
  *   get:
  *     tags: [Sprints]
  *     summary: Get backlog issues (no sprint assigned)
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project identifier
+ *       - in: query
+ *         name: cursor
+ *         schema:
+ *           type: string
+ *         description: Cursor for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: Page size
  */
 router.get('/backlog', requireProjectAccess('VIEWER'), SprintController.getBacklog);
 
@@ -66,6 +128,13 @@ sprintRouter.use(authenticate);
  *   get:
  *     tags: [Sprints]
  *     summary: Get sprint by ID
+ *     parameters:
+ *       - in: path
+ *         name: sprintId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Sprint identifier
  */
 sprintRouter.get('/:sprintId', SprintController.getById);
 
@@ -75,6 +144,30 @@ sprintRouter.get('/:sprintId', SprintController.getById);
  *   patch:
  *     tags: [Sprints]
  *     summary: Update sprint
+ *     parameters:
+ *       - in: path
+ *         name: sprintId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Sprint identifier
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               goal:
+ *                 type: string
+ *               startDate:
+ *                 type: string
+ *                 format: date
+ *               endDate:
+ *                 type: string
+ *                 format: date
  */
 sprintRouter.patch(
   '/:sprintId',
@@ -95,6 +188,13 @@ sprintRouter.delete('/:sprintId', SprintController.delete);
  *   post:
  *     tags: [Sprints]
  *     summary: Start a sprint
+ *     parameters:
+ *       - in: path
+ *         name: sprintId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Sprint identifier
  */
 sprintRouter.post('/:sprintId/start', SprintController.start);
 
@@ -104,6 +204,25 @@ sprintRouter.post('/:sprintId/start', SprintController.start);
  *   post:
  *     tags: [Sprints]
  *     summary: Complete a sprint (with optional carry-over)
+ *     parameters:
+ *       - in: path
+ *         name: sprintId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Sprint identifier
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               carryOverIssueIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               targetSprintId:
+ *                 type: string
  */
 sprintRouter.post(
   '/:sprintId/complete',

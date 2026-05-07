@@ -15,6 +15,46 @@ router.use(authenticate);
  *   post:
  *     tags: [Issues]
  *     summary: Create a new issue
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project identifier
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [type, title]
+ *             properties:
+ *               type:
+ *                 type: string
+ *                 enum: [EPIC, STORY, TASK, BUG, SUBTASK]
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               priority:
+ *                 type: string
+ *                 enum: [CRITICAL, HIGH, MEDIUM, LOW]
+ *               assigneeId:
+ *                 type: string
+ *               parentId:
+ *                 type: string
+ *               sprintId:
+ *                 type: string
+ *               storyPoints:
+ *                 type: integer
+ *               labels:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               dueDate:
+ *                 type: string
+ *                 format: date-time
  */
 router.post(
   '/',
@@ -49,6 +89,13 @@ router.patch(
  *   get:
  *     tags: [Issues]
  *     summary: Get board state (active sprint issues grouped by status)
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project identifier
  */
 router.get('/board', requireProjectAccess('VIEWER'), IssueController.getBoardState);
 
@@ -71,6 +118,13 @@ issueRouter.use(authenticate);
  *   get:
  *     tags: [Issues]
  *     summary: Get issue by ID or key
+ *     parameters:
+ *       - in: path
+ *         name: issueId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Issue ID or key
  */
 issueRouter.get('/:issueId', IssueController.getById);
 
@@ -80,6 +134,41 @@ issueRouter.get('/:issueId', IssueController.getById);
  *   patch:
  *     tags: [Issues]
  *     summary: Update issue fields (with optimistic locking)
+ *     parameters:
+ *       - in: path
+ *         name: issueId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Issue ID or key
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [version]
+ *             properties:
+ *               version:
+ *                 type: integer
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               priority:
+ *                 type: string
+ *                 enum: [CRITICAL, HIGH, MEDIUM, LOW]
+ *               assigneeId:
+ *                 type: string
+ *               storyPoints:
+ *                 type: integer
+ *               labels:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               dueDate:
+ *                 type: string
+ *                 format: date-time
  */
 issueRouter.patch(
   '/:issueId',
@@ -98,6 +187,13 @@ issueRouter.patch(
  *   delete:
  *     tags: [Issues]
  *     summary: Delete an issue
+ *     parameters:
+ *       - in: path
+ *         name: issueId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Issue ID or key
  */
 issueRouter.delete('/:issueId', IssueController.delete);
 
@@ -108,6 +204,25 @@ issueRouter.delete('/:issueId', IssueController.delete);
  *     tags: [Workflow]
  *     summary: Transition issue to a new status
  *     description: Returns 422 if transition is not allowed, with list of allowed transitions
+ *     parameters:
+ *       - in: path
+ *         name: issueId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Issue ID or key
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [toStatusId]
+ *             properties:
+ *               toStatusId:
+ *                 type: string
+ *               comment:
+ *                 type: string
  */
 issueRouter.post(
   '/:issueId/transitions',

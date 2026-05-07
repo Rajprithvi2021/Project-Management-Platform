@@ -21,6 +21,7 @@ jest.mock('../src/config/database', () => ({
   prisma: {
     issue: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -59,6 +60,7 @@ jest.mock('../src/config/database', () => ({
     },
     automationRule: { findMany: jest.fn() },
     customFieldValue: { findFirst: jest.fn() },
+    $queryRaw: jest.fn(),
   },
 }));
 
@@ -114,7 +116,7 @@ describe('Scenario 1: Concurrent Issue Updates', () => {
   });
 
   it('User A successfully updates assignee with correct version', async () => {
-    (mockPrisma.issue.findUnique as jest.Mock).mockResolvedValue({ ...baseIssue, version: 3 });
+    (mockPrisma.issue.findFirst as jest.Mock).mockResolvedValue({ ...baseIssue, version: 3 });
     (mockPrisma.issue.update as jest.Mock).mockResolvedValue({
       ...baseIssue,
       assigneeId: 'user-b',
@@ -138,7 +140,7 @@ describe('Scenario 1: Concurrent Issue Updates', () => {
 
   it('User B update is rejected with 409 Conflict when version is stale', async () => {
     // Issue was already updated by User A (version is now 4)
-    (mockPrisma.issue.findUnique as jest.Mock).mockResolvedValue({ ...baseIssue, version: 4 });
+    (mockPrisma.issue.findFirst as jest.Mock).mockResolvedValue({ ...baseIssue, version: 4 });
 
     // User B tries to update with stale version (3)
     await expect(
@@ -155,7 +157,7 @@ describe('Scenario 1: Concurrent Issue Updates', () => {
 
   it('Both updates succeed when applied sequentially with correct versions', async () => {
     // User A: changes assignee (v3 → v4)
-    (mockPrisma.issue.findUnique as jest.Mock).mockResolvedValueOnce({ ...baseIssue, version: 3 });
+    (mockPrisma.issue.findFirst as jest.Mock).mockResolvedValueOnce({ ...baseIssue, version: 3 });
     (mockPrisma.issue.update as jest.Mock).mockResolvedValueOnce({
       ...baseIssue, assigneeId: 'user-b', version: 4,
     });
@@ -167,7 +169,7 @@ describe('Scenario 1: Concurrent Issue Updates', () => {
     expect(firstResult.version).toBe(4);
 
     // User B: changes priority with fresh version (v4 → v5)
-    (mockPrisma.issue.findUnique as jest.Mock).mockResolvedValueOnce({
+    (mockPrisma.issue.findFirst as jest.Mock).mockResolvedValueOnce({
       ...baseIssue, assigneeId: 'user-b', version: 4,
     });
     (mockPrisma.issue.update as jest.Mock).mockResolvedValueOnce({
@@ -217,7 +219,7 @@ describe('Scenario 2: Sprint Completion with Carry-Over', () => {
   });
 
   it('completes sprint and calculates velocity from completed issues', async () => {
-    (mockPrisma.sprint.findUnique as jest.Mock).mockResolvedValue(sprint);
+    (mockPrisma.sprint.findFirst as jest.Mock).mockResolvedValue(sprint);
     (mockPrisma.sprint.update as jest.Mock).mockResolvedValue({
       ...sprint, status: 'COMPLETED', completedAt: new Date(), velocity: 8,
     });
@@ -237,7 +239,7 @@ describe('Scenario 2: Sprint Completion with Carry-Over', () => {
   });
 
   it('carries over selected incomplete issues to next sprint', async () => {
-    (mockPrisma.sprint.findUnique as jest.Mock).mockResolvedValue(sprint);
+    (mockPrisma.sprint.findFirst as jest.Mock).mockResolvedValue(sprint);
     (mockPrisma.sprint.update as jest.Mock).mockResolvedValue({ ...sprint, status: 'COMPLETED', velocity: 8 });
 
     const result = await SprintService.complete({
@@ -257,7 +259,7 @@ describe('Scenario 2: Sprint Completion with Carry-Over', () => {
   });
 
   it('moves non-carried-over incomplete issues to backlog', async () => {
-    (mockPrisma.sprint.findUnique as jest.Mock).mockResolvedValue(sprint);
+    (mockPrisma.sprint.findFirst as jest.Mock).mockResolvedValue(sprint);
     (mockPrisma.sprint.update as jest.Mock).mockResolvedValue({ ...sprint, status: 'COMPLETED', velocity: 8 });
 
     await SprintService.complete({
@@ -291,7 +293,7 @@ describe('Scenario 2: Sprint Completion with Carry-Over', () => {
   });
 
   it('rejects completion of a non-active sprint', async () => {
-    (mockPrisma.sprint.findUnique as jest.Mock).mockResolvedValue({ ...sprint, status: 'PLANNING' });
+    (mockPrisma.sprint.findFirst as jest.Mock).mockResolvedValue({ ...sprint, status: 'PLANNING' });
 
     await expect(
       SprintService.complete({ sprintId: 'sprint-1', userId: 'user-1' })
@@ -499,6 +501,7 @@ describe('Activity Service', () => {
 describe('Search Service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (mockPrisma.$queryRaw as jest.Mock).mockResolvedValue([{ id: 'issue-1' }]);
   });
 
   it('filters by status name when status query param is provided', async () => {
