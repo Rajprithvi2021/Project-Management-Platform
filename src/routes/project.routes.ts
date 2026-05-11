@@ -15,6 +15,37 @@ router.use(authenticate);
  *   post:
  *     tags: [Projects]
  *     summary: Create a new project
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - key
+ *               - name
+ *             properties:
+ *               key:
+ *                 type: string
+ *                 example: "TEST"
+ *                 description: "Project key (2-10 uppercase alphanumeric characters)"
+ *               name:
+ *                 type: string
+ *                 example: "Test Project"
+ *                 description: "Project name"
+ *               description:
+ *                 type: string
+ *                 example: "My first project"
+ *                 description: "Optional project description"
+ *               workspaceId:
+ *                 type: string
+ *                 description: "Optional workspace ID (creates new workspace if not provided)"
+ *               workspaceName:
+ *                 type: string
+ *                 description: "Optional workspace name (used if workspaceId not provided)"
+ *     responses:
+ *       201:
+ *         description: Project created successfully
  */
 router.post(
   '/',
@@ -26,6 +57,16 @@ router.post(
   ProjectController.create
 );
 
+/**
+ * @swagger
+ * /projects:
+ *   get:
+ *     tags: [Projects]
+ *     summary: Get all projects for current user
+ *     responses:
+ *       200:
+ *         description: List of projects retrieved successfully
+ */
 router.get('/', ProjectController.getMyProjects);
 
 router.get('/:projectId', requireProjectAccess('VIEWER'), ProjectController.getById);

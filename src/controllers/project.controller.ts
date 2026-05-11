@@ -62,4 +62,16 @@ export class ProjectController {
       res.status(201).json({ success: true, data: field });
     } catch (error) { next(error); }
   }
+  static async getBoard(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const board = await ProjectService.getBoard(projectId(req));
+
+      return res.json({
+        success: true,
+        data: board,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
