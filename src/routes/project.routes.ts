@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
 import { ProjectController } from '../controllers/project.controller';
+import { IssueController } from '../controllers/issue.controller';
+import { SprintController } from '../controllers/sprint.controller';
 import { authenticate, requireProjectAccess } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
 
@@ -68,6 +70,11 @@ router.post(
  *         description: List of projects retrieved successfully
  */
 router.get('/', ProjectController.getMyProjects);
+
+// Swagger documents these under /projects/:projectId/*, so expose aliases here.
+router.get('/:projectId/board', requireProjectAccess('VIEWER'), IssueController.getBoardState);
+router.get('/:projectId/backlog', requireProjectAccess('VIEWER'), SprintController.getBacklog);
+router.get('/:projectId/velocity', requireProjectAccess('VIEWER'), SprintController.getVelocity);
 
 router.get('/:projectId', requireProjectAccess('VIEWER'), ProjectController.getById);
 

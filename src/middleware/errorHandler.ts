@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { Prisma } from '@prisma/client';
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -11,8 +12,18 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  const statusCode = err.statusCode || 500;
-  const message = err.isOperational ? err.message : 'Internal server error';
+  let statusCode = err.statusCode || 500;
+  let message = err.isOperational ? err.message : 'Internal server error';
+
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === 'P2002') {
+      statusCode = 409;
+      message = 'A record with the same unique value already exists';
+    } else if (err.code === 'P2025') {
+      statusCode = 404;
+      message = 'Requested record was not found';
+    }
+  }
 
   if (process.env.NODE_ENV !== 'test') {
     console.error('Error:', {

@@ -55,6 +55,17 @@ router.use(authenticate);
  *               dueDate:
  *                 type: string
  *                 format: date-time
+  *     responses:
+  *       201:
+  *         description: Issue created successfully
+  *       400:
+  *         description: Validation error
+  *       401:
+  *         description: Unauthorized
+  *       404:
+  *         description: Project not found
+  *       422:
+  *         description: Unprocessable Entity
  */
 router.post(
   '/',
@@ -96,6 +107,13 @@ router.patch(
  *         schema:
  *           type: string
  *         description: Project identifier
+  *     responses:
+  *       200:
+  *         description: Board state fetched successfully
+  *       401:
+  *         description: Unauthorized
+  *       404:
+  *         description: Project not found
  */
 router.get('/board', requireProjectAccess('VIEWER'), IssueController.getBoardState);
 
@@ -125,6 +143,13 @@ issueRouter.use(authenticate);
  *         schema:
  *           type: string
  *         description: Issue ID or key
+  *     responses:
+  *       200:
+  *         description: Issue fetched successfully
+  *       401:
+  *         description: Unauthorized
+  *       404:
+  *         description: Issue not found
  */
 issueRouter.get('/:issueId', IssueController.getById);
 
@@ -169,6 +194,17 @@ issueRouter.get('/:issueId', IssueController.getById);
  *               dueDate:
  *                 type: string
  *                 format: date-time
+  *     responses:
+  *       200:
+  *         description: Issue updated successfully
+  *       400:
+  *         description: Validation error
+  *       401:
+  *         description: Unauthorized
+  *       404:
+  *         description: Issue not found
+  *       409:
+  *         description: Version conflict
  */
 issueRouter.patch(
   '/:issueId',
@@ -194,6 +230,13 @@ issueRouter.patch(
  *         schema:
  *           type: string
  *         description: Issue ID or key
+  *     responses:
+  *       204:
+  *         description: Issue deleted successfully
+  *       401:
+  *         description: Unauthorized
+  *       404:
+  *         description: Issue not found
  */
 issueRouter.delete('/:issueId', IssueController.delete);
 

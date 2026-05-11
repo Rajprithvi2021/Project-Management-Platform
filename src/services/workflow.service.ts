@@ -4,6 +4,7 @@ import { ActivityService } from './activity.service';
 import { NotificationService } from './notification.service';
 import { redisPublish } from '../config/redis';
 import { WebSocketEvent } from '../types';
+import { IssueService } from './issue.service';
 
 export class WorkflowService {
   /**
@@ -16,8 +17,10 @@ export class WorkflowService {
     userId: string;
     comment?: string;
   }) {
+    const resolvedIssue = await IssueService.resolveIssueIdentifier(params.issueId);
+
     const issue = await prisma.issue.findUnique({
-      where: { id: params.issueId },
+      where: { id: resolvedIssue.id },
       include: {
         status: true,
         project: true,
@@ -76,7 +79,7 @@ export class WorkflowService {
 
     // Update issue status with optimistic locking
     const updated = await prisma.issue.update({
-      where: { id: params.issueId },
+      where: { id: resolvedIssue.id },
       data: {
         statusId: params.toStatusId,
         version: { increment: 1 },
@@ -135,8 +138,10 @@ export class WorkflowService {
   }
 
   static async getAvailableTransitions(issueId: string) {
+    const resolvedIssue = await IssueService.resolveIssueIdentifier(issueId);
+
     const issue = await prisma.issue.findUnique({
-      where: { id: issueId },
+      where: { id: resolvedIssue.id },
       select: { projectId: true, statusId: true, status: { select: { name: true } } },
     });
     if (!issue) throw createError('Issue not found', 404);
@@ -188,6 +193,20 @@ export class WorkflowService {
     conditions?: object[];
     actions?: object[];
   }) {
+    const existingTransition = await prisma.workflowTransition.findUnique({
+      where: {
+        projectId_fromStatusId_toStatusId: {
+          projectId,
+          fromStatusId: data.fromStatusId,
+          toStatusId: data.toStatusId,
+        },
+      },
+    });
+
+    if (existingTransition) {
+      throw createError('A workflow transition with the same source and destination already exists', 409);
+    }
+
     return prisma.workflowTransition.create({
       data: {
         projectId,

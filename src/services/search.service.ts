@@ -1,6 +1,5 @@
 import { prisma } from '../config/database';
 import { redisGet, redisSet } from '../config/redis';
-import { Prisma } from '@prisma/client';
 
 function normalizeCacheKey(params: Record<string, unknown>) {
   return `search:${Object.entries(params)
@@ -42,13 +41,34 @@ export class SearchService {
       return JSON.parse(cachePayload) as any;
     }
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { deletedAt: null };
+    const andFilters: Record<string, unknown>[] = [];
+
     if (params.projectId) where.projectId = params.projectId;
     if (params.statusId) where.statusId = params.statusId;
     if (params.assigneeId) where.assigneeId = params.assigneeId;
     if (params.type) where.type = params.type;
     if (params.sprintId) where.sprintId = params.sprintId;
     if (params.labels?.length) where.labels = { hasSome: params.labels };
+
+    if (params.status) {
+      where.status = {
+        name: {
+          equals: params.status,
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    if (params.assignee) {
+      where.assignee = {
+        OR: [
+          { displayName: { contains: params.assignee, mode: 'insensitive' } },
+          { email: { contains: params.assignee, mode: 'insensitive' } },
+        ],
+      };
+    }
+
     if (params.priority) {
       const priorityMap: Record<string, string[]> = {
         CRITICAL: ['CRITICAL'],
@@ -59,28 +79,25 @@ export class SearchService {
       where.priority = { in: priorityMap[params.priority.toUpperCase()] || [params.priority.toUpperCase()] };
     }
 
-    let issueIds: string[] | null = null;
     if (params.q) {
-      const raw = await prisma.$queryRaw<Array<{ id: string }>>(
-        Prisma.sql`
-          SELECT DISTINCT i.id
-          FROM issues i
-          LEFT JOIN comments c ON c.issue_id = i.id
-          WHERE (
-            to_tsvector('english', coalesce(i.title, '') || ' ' || coalesce(i.description, '')) @@ plainto_tsquery('english', ${params.q})
-            OR to_tsvector('english', coalesce(c.content, '')) @@ plainto_tsquery('english', ${params.q})
-          )
-          ORDER BY i.${Prisma.raw(sortField)} ${Prisma.raw(sortDir.toUpperCase())}
-          LIMIT ${limit + 1}
-        `
-      );
-      issueIds = raw.map((row) => row.id);
-      if (!issueIds.length) {
-        const emptyResult = { data: [], pagination: { hasMore: false, nextCursor: undefined } };
-        await redisSet(cacheKey, JSON.stringify(emptyResult), 30);
-        return emptyResult;
-      }
-      where.id = { in: issueIds };
+      where.OR = [
+        { title: { contains: params.q, mode: 'insensitive' } },
+        { description: { contains: params.q, mode: 'insensitive' } },
+        { comments: { some: { content: { contains: params.q, mode: 'insensitive' } } } },
+        { key: { contains: params.q, mode: 'insensitive' } },
+      ];
+    }
+
+    if (params.cursor) {
+      andFilters.push({
+        id: {
+          lt: params.cursor,
+        },
+      });
+    }
+
+    if (andFilters.length > 0) {
+      where.AND = andFilters;
     }
 
     const issues = await prisma.issue.findMany({

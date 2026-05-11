@@ -6,6 +6,35 @@ import { redisPublish } from '../config/redis';
 import { WebSocketEvent } from '../types';
 
 export class IssueService {
+  private static isUuid(value: string) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  static async resolveIssueIdentifier(identifier: string) {
+    const issue = await prisma.issue.findFirst({
+      where: this.isUuid(identifier)
+        ? {
+            id: identifier,
+            deletedAt: null,
+          }
+        : {
+            key: identifier,
+            deletedAt: null,
+          },
+      select: {
+        id: true,
+        key: true,
+        projectId: true,
+      },
+    });
+
+    if (!issue) {
+      throw createError('Issue not found', 404);
+    }
+
+    return issue;
+  }
+
   static async create(params: {
     projectId: string;
     type: string;
@@ -128,9 +157,11 @@ export class IssueService {
       dueDate?: Date | null;
     };
   }) {
+    const resolvedIssue = await this.resolveIssueIdentifier(params.issueId);
+
     // Optimistic locking: verify version matches
     const existing = await prisma.issue.findFirst({
-      where: { id: params.issueId, deletedAt: null },
+      where: { id: resolvedIssue.id, deletedAt: null },
       include: { status: true, project: true },
     });
 
@@ -160,7 +191,7 @@ export class IssueService {
     }
 
     const updated = await prisma.issue.update({
-      where: { id: params.issueId },
+      where: { id: resolvedIssue.id },
       data: updateData,
       include: this.defaultInclude(),
     });
@@ -246,14 +277,16 @@ export class IssueService {
   }
 
   static async delete(issueId: string, userId: string) {
+    const resolvedIssue = await this.resolveIssueIdentifier(issueId);
+
     const issue = await prisma.issue.findFirst({
-      where: { id: issueId, deletedAt: null },
+      where: { id: resolvedIssue.id, deletedAt: null },
       select: { id: true, key: true, projectId: true, title: true },
     });
     if (!issue) throw createError('Issue not found', 404);
 
     await prisma.issue.update({
-      where: { id: issueId },
+      where: { id: resolvedIssue.id },
       data: { deletedAt: new Date(), version: { increment: 1 } },
     });
 
@@ -269,7 +302,7 @@ export class IssueService {
     const event: WebSocketEvent = {
       type: 'issue_updated',
       projectId: issue.projectId,
-      payload: { issueId, deleted: true },
+      payload: { issueId: issue.id, deleted: true },
       timestamp: new Date().toISOString(),
       userId,
     };
@@ -299,8 +332,10 @@ export class IssueService {
   }
 
   static async moveToSprint(issueId: string, sprintId: string | null, userId: string) {
+    const resolvedIssue = await this.resolveIssueIdentifier(issueId);
+
     const issue = await prisma.issue.findFirst({
-      where: { id: issueId, deletedAt: null },
+      where: { id: resolvedIssue.id, deletedAt: null },
       select: { id: true, key: true, projectId: true, sprintId: true, title: true },
     });
     if (!issue) throw createError('Issue not found', 404);
@@ -311,7 +346,7 @@ export class IssueService {
     }
 
     const updated = await prisma.issue.update({
-      where: { id: issueId },
+      where: { id: resolvedIssue.id },
       data: { sprintId, version: { increment: 1 } },
       include: this.defaultInclude(),
     });
@@ -339,46 +374,50 @@ export class IssueService {
   }
 
   static async watchIssue(issueId: string, userId: string) {
+    const resolvedIssue = await this.resolveIssueIdentifier(issueId);
+
     const issue = await prisma.issue.findFirst({
-      where: { id: issueId, deletedAt: null },
+      where: { id: resolvedIssue.id, deletedAt: null },
       select: { id: true, projectId: true },
     });
     if (!issue) throw createError('Issue not found', 404);
 
     await prisma.issueWatcher.upsert({
-      where: { issueId_userId: { issueId, userId } },
-      create: { issueId, userId },
+      where: { issueId_userId: { issueId: issue.id, userId } },
+      create: { issueId: issue.id, userId },
       update: {},
     });
 
     await ActivityService.log({
       projectId: issue.projectId,
-      issueId,
+      issueId: issue.id,
       userId,
       action: 'WATCHED',
       entityType: 'Issue',
-      entityId: issueId,
+      entityId: issue.id,
     });
 
     return { watching: true };
   }
 
   static async unwatchIssue(issueId: string, userId: string) {
+    const resolvedIssue = await this.resolveIssueIdentifier(issueId);
+
     const issue = await prisma.issue.findFirst({
-      where: { id: issueId, deletedAt: null },
+      where: { id: resolvedIssue.id, deletedAt: null },
       select: { id: true, projectId: true },
     });
     if (!issue) throw createError('Issue not found', 404);
 
-    await prisma.issueWatcher.deleteMany({ where: { issueId, userId } });
+    await prisma.issueWatcher.deleteMany({ where: { issueId: issue.id, userId } });
 
     await ActivityService.log({
       projectId: issue.projectId,
-      issueId,
+      issueId: issue.id,
       userId,
       action: 'UNWATCHED',
       entityType: 'Issue',
-      entityId: issueId,
+      entityId: issue.id,
     });
 
     return { watching: false };
@@ -460,8 +499,13 @@ export class IssueService {
     type: string;
     userId: string;
   }) {
-    const issue = await prisma.issue.findFirst({ where: { id: params.issueId, deletedAt: null } });
-    const relatedIssue = await prisma.issue.findFirst({ where: { id: params.relatedIssueId, deletedAt: null } });
+    const [resolvedIssue, resolvedRelatedIssue] = await Promise.all([
+      this.resolveIssueIdentifier(params.issueId),
+      this.resolveIssueIdentifier(params.relatedIssueId),
+    ]);
+
+    const issue = await prisma.issue.findFirst({ where: { id: resolvedIssue.id, deletedAt: null } });
+    const relatedIssue = await prisma.issue.findFirst({ where: { id: resolvedRelatedIssue.id, deletedAt: null } });
     if (!issue || !relatedIssue) throw createError('One or both related issues were not found', 404);
     if (issue.projectId !== relatedIssue.projectId) {
       throw createError('Issue relationships must exist within the same project', 400);
@@ -470,14 +514,14 @@ export class IssueService {
     const relationship = await prisma.issueRelationship.upsert({
       where: {
         issueId_relatedIssueId_relationshipType: {
-          issueId: params.issueId,
-          relatedIssueId: params.relatedIssueId,
+          issueId: resolvedIssue.id,
+          relatedIssueId: resolvedRelatedIssue.id,
           relationshipType: params.type as any,
         },
       },
       create: {
-        issueId: params.issueId,
-        relatedIssueId: params.relatedIssueId,
+        issueId: resolvedIssue.id,
+        relatedIssueId: resolvedRelatedIssue.id,
         projectId: issue.projectId,
         relationshipType: params.type as any,
       },
@@ -496,7 +540,7 @@ export class IssueService {
       entityId: relationship.id,
       metadata: {
         relationshipType: params.type,
-        relatedIssueId: params.relatedIssueId,
+        relatedIssueId: relatedIssue.id,
       },
     });
 
@@ -504,9 +548,11 @@ export class IssueService {
   }
 
   static async getRelationships(issueId: string) {
+    const resolvedIssue = await this.resolveIssueIdentifier(issueId);
+
     return prisma.issueRelationship.findMany({
       where: {
-        OR: [{ issueId }, { relatedIssueId: issueId }],
+        OR: [{ issueId: resolvedIssue.id }, { relatedIssueId: resolvedIssue.id }],
       },
       include: {
         issue: { select: { id: true, key: true, title: true } },

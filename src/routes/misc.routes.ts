@@ -85,6 +85,13 @@ const router = Router();
  *           type: string
  *           enum: [asc, desc]
  *         description: Sort order
+  *     responses:
+  *       200:
+  *         description: Search results fetched successfully
+  *       400:
+  *         description: Validation error
+  *       401:
+  *         description: Unauthorized
  */
 router.get('/search', authenticate, SearchController.search);
 
@@ -116,6 +123,13 @@ router.get('/search', authenticate, SearchController.search);
  *         schema:
  *           type: integer
  *         description: Page size
+  *     responses:
+  *       200:
+  *         description: Comment search results fetched successfully
+  *       400:
+  *         description: Validation error
+  *       401:
+  *         description: Unauthorized
  */
 router.get('/search/comments', authenticate, SearchController.searchComments);
 
@@ -213,6 +227,13 @@ router.get(
  *         schema:
  *           type: string
  *         description: Project identifier
+ *     responses:
+ *       200:
+ *         description: Workflow fetched successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Project not found
  */
 router.get(
   '/projects/:projectId/workflow',
@@ -250,6 +271,15 @@ router.get(
  *                 type: string
  *               position:
  *                 type: integer
+ *     responses:
+ *       201:
+ *         description: Workflow status created successfully
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Project not found
  */
 router.post(
   '/projects/:projectId/workflow/statuses',
@@ -293,6 +323,15 @@ router.post(
  *                 type: array
  *                 items:
  *                   type: object
+ *     responses:
+ *       201:
+ *         description: Workflow transition created successfully
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Project not found
  */
 router.post(
   '/projects/:projectId/workflow/transitions',
