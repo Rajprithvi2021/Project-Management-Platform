@@ -184,6 +184,33 @@ export class ProjectService {
       },
     });
   }
+  static async getBoard(projectId: string) {
+    const statuses = await prisma.workflowStatus.findMany({
+      where: { projectId },
+      orderBy: { position: 'asc' },
+      include: {
+        issues: {
+          where: {
+            deletedAt: null,
+          },
+          include: {
+            assignee: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+          orderBy: {
+            updatedAt: 'desc',
+          },
+        },
+      },
+    });
+
+    return statuses;
+  }
 
   static async setCustomFieldValue(issueId: string, customFieldId: string, value: unknown) {
     const issue = await prisma.issue.findFirst({
